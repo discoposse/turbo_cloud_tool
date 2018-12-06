@@ -24,7 +24,8 @@ import (
 
 var srcfile string
 var destfile string
-var fudgeFactor int
+var memFudgeFactor int
+var cpuFudgeFactor int
 
 // templateMatchCmd represents the templateMatch command
 var templateMatchCmd = &cobra.Command{
@@ -59,7 +60,7 @@ var templateMatchCmd = &cobra.Command{
 		for _, profile := range src_profiles {
 			if profile.Name == args[0] {
 				fmt.Println(fmt.Sprintf("Found profile matching %s in source topology, looking for a suitable equivalent in the destination topology", args[0]))
-				dest_profile, other_candidates := profile.FindClosestMatch(dst_profiles, dst_costs, fudgeFactor)
+				dest_profile, other_candidates := profile.FindClosestMatch(dst_profiles, dst_costs, memFudgeFactor, cpuFudgeFactor)
 				output := map[string]interface{}{
 					"source_template":  profile,
 					"chosen_template":  dest_profile,
@@ -83,7 +84,8 @@ func init() {
 
 	templateMatchCmd.Flags().StringVarP(&srcfile, "source", "s", "", "The cost.topology file containing the [template] passed into the command")
 	templateMatchCmd.Flags().StringVarP(&destfile, "dest", "d", "", "The cost.topology file containing the destination template options to compare with [template]")
-	templateMatchCmd.Flags().IntVarP(&fudgeFactor, "fudge-factor", "f", 10, "The amount (in percent) the target template can be under or over on CPU or memory and still match.")
+	templateMatchCmd.Flags().IntVarP(&memFudgeFactor, "mem-fudge-factor", "m", 10, "The amount (in percent) the target template can be under or over memory and still match.")
+	templateMatchCmd.Flags().IntVarP(&cpuFudgeFactor, "cpu-fudge-factor", "c", 10, "The amount (in percent) the target template can be under or over CPU and still match.")
 
 	// Here you will define your flags and configuration settings.
 

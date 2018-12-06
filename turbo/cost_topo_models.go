@@ -137,15 +137,16 @@ func (p Profile) GetCpuCapacity() float64 {
 	return p.Properties.VMPROFILE_VCPU_SPEED_MHZ * p.Properties.VMPROFILE_VCPU_COUNT
 }
 
-func (p Profile) FindClosestMatch(other_profiles []Profile, dest_costs []OnDemandCost, margin int) (Profile, []Profile) {
-	float_margin := float64(margin) / 100.00
+func (p Profile) FindClosestMatch(other_profiles []Profile, dest_costs []OnDemandCost, mem_margin int, cpu_margin int) (Profile, []Profile) {
+	float_mem_margin := float64(mem_margin) / 100.00
+	float_cpu_margin := float64(cpu_margin) / 100.00
 	candidates := make([]Profile, 0)
 	this_cpu := p.GetCpuCapacity()
-	this_cpu_min := this_cpu - this_cpu*float_margin
-	this_cpu_max := this_cpu + this_cpu*float_margin
+	this_cpu_min := this_cpu - this_cpu*float_cpu_margin
+	this_cpu_max := this_cpu + this_cpu*float_cpu_margin
 	this_mem := p.Properties.VMPROFILE_VMEM_SIZE_KB
-	this_mem_min := this_mem - this_mem*float_margin
-	this_mem_max := this_mem + this_mem*float_margin
+	this_mem_min := this_mem - this_mem*float_mem_margin
+	this_mem_max := this_mem + this_mem*float_mem_margin
 	// Look for an exact match on CPU and Memory
 	for _, other_profile := range other_profiles {
 		if this_cpu == other_profile.GetCpuCapacity() &&
