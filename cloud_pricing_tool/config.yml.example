@@ -1,0 +1,4 @@
+azure-subscription-id: "your sub id"
+azure-tenant-id: "your tenant id"
+azure-client-id: "your client id"
+azure-client-secret: "your client secret"
