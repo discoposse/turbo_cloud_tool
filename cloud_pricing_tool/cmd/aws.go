@@ -15,12 +15,19 @@
 package cmd
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"strconv"
 	"strings"
+	"unicode"
 
+	"git.turbonomic.com/rgeyer/cloud_pricing_tool/cloud_pricing_tool/lib"
 	"git.turbonomic.com/rgeyer/cloud_pricing_tool/clouds"
 	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -40,9 +47,9 @@ var turbo_password string
 var turbo_target_create bool
 var turbo_target_delete bool
 var turbo_target_prefix string
-var turbo_trusted_account_id = "905994805379"
-var turbo_trusted_account_role = "foo"
-var turbo_trusted_account_instanceid = "*"
+var turbo_trusted_account_id string
+var turbo_trusted_account_role string
+var turbo_trusted_account_instanceid string
 
 var readonly_policy_names = []string{
 	"AmazonEC2ReadOnlyAccess",
@@ -66,19 +73,53 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		stdinReader := bufio.NewReader(os.Stdin)
+		var output *lib.AwsTargetCmdOutput
+		if len(aws_acct_file) > 0 {
+			if _, err := os.Stat(aws_acct_file); err == nil {
+				jFile, err := os.Open(aws_acct_file)
+				if err != nil {
+					log.Fatalf("Unable to open AWS account file %s. Error: %v", aws_acct_file, err)
+					return nil
+				}
+				jFileBytes, err := ioutil.ReadAll(jFile)
+				if err != nil {
+					log.Fatalf("Unable to read contents of AWS account file %s. Error: %v", aws_acct_file, err)
+					return nil
+				}
+				err = json.Unmarshal(jFileBytes, &output)
+				if err != nil {
+					log.Fatalf("AWS account file %s, either was not valid JSON, or did not have the correct content. Please verify the file content and try again. Error: %v", aws_acct_file, err)
+					return nil
+				}
+			}
+		}
+		if output == nil {
+			output = &lib.AwsTargetCmdOutput{
+				Accounts: map[string]*lib.AwsTargetCmdAccount{},
+			}
+		}
 		tags = append(tags, fmt.Sprintf("Turbonomic-Host:%s", turbo_hostname))
 		if iam_principal_create || iam_principal_delete {
-			aws := clouds.Aws{}
+			aws := clouds.Aws{
+				Logger: log,
+			}
 			aws.SetCredentials(aws_access_key_id, aws_secret_access_key)
 
 			log.Info("Querying org for list of child accounts...")
 
 			accts, err := aws.ListAllOrgAccounts()
 			if err != nil {
-				return fmt.Errorf("Unable to list accounts in the organization. Caused By: %v", err)
+				msg := fmt.Sprintf("Unable to list accounts in the organization. Error: %v", err)
+				output.Errors = append(output.Errors, msg)
+				log.Fatal(msg)
+				return nil
 			}
 
+			// Account Loop
 			for _, acct := range accts {
+				outputAcct := &lib.AwsTargetCmdAccount{Id: *acct.Id}
+				output.Accounts[*acct.Id] = outputAcct
 				iamCli := iam.New(aws.GetSession(), aws.GetConfig("us-east-1", *acct.Id, x_acct_role))
 				acctLog := log.WithField("account", fmt.Sprintf("%v (%v)", *acct.Name, *acct.Id))
 				acctLog.Infof("Assuming the role %v on account...", x_acct_role)
@@ -89,21 +130,48 @@ to quickly create a Cobra application.`,
 					userLog.Infof("Searching for users matching the username \"%s\" and/or tags \"%v\"", iam_principal_name, tags)
 					matches, err := aws.FindMatchingUsers(*acct.Id, x_acct_role, iam_principal_name, tags)
 					if err != nil {
-						userLog.Errorf("Failed to query users in the account. Skipping actions in this account. Error: %v", err)
+						msg := fmt.Sprintf("Failed to query users in the account. Skipping actions in this account. Error: %v", err)
+						outputAcct.Errors = append(outputAcct.Errors, msg)
+						userLog.Errorf(msg)
 						continue
+					}
+					if len(matches) > 0 {
+						var matchesBuf bytes.Buffer
+						for idx, match := range matches {
+							matchesBuf.WriteString(fmt.Sprintf("%v: %v\n", idx, match.String()))
+						}
+						userLog.Infof("Matching users found\n%v", matchesBuf.String())
 					}
 
 					// User Create flow
 					if iam_principal_create {
+						outputAcct.Principal = &lib.AwsTargetCmdPrincipal{
+							PrincipalType: "User",
+							Name:          iam_principal_name,
+						}
 						userLog = userLog.WithField("action", "AddUser")
-						if len(matches) > 0 {
-							// Ask them if they're sure?
-							userLog.Warn("A user with the specified username already exists. Duplicate users are not allowed. Please try a different username, or delete the existing user.")
+						// TODO: We're currently blocking only when the username matches.
+						// Logic should be added to consider (re)using existing users which
+						// are similar (some tags match).
+						canNotProceed := false
+						for _, match := range matches {
+							if match.PrincipalnameMatch() {
+								canNotProceed = true
+							}
+						}
+
+						if canNotProceed {
+							msg := fmt.Sprintf("A user with the username \"%s\" already exists. Duplicate users are not allowed. Please try a different username, or delete the existing user.", iam_principal_name)
+							outputAcct.Principal.Errors = append(outputAcct.Principal.Errors, msg)
+							userLog.Warnf(msg)
+							continue
 						} else {
 							userLog.Info("Creating User")
 							cuo, err := iamCli.CreateUser(&iam.CreateUserInput{UserName: &iam_principal_name, Tags: clouds.ConvertStringTagsPointer(tags)})
 							if err != nil {
-								userLog.Errorf("Failed to create user. Skipping actions in this account. Error: %v", err)
+								msg := fmt.Sprintf("Failed to create user. Skipping actions in this account. Error: %v", err)
+								outputAcct.Principal.Errors = append(outputAcct.Principal.Errors, msg)
+								userLog.Errorf(msg)
 								continue
 							}
 							userLog.Debug("User Created")
@@ -127,17 +195,23 @@ to quickly create a Cobra application.`,
 								})
 
 								if err != nil {
-									userLog.Errorf("Unable to attach policy (%v) to user. Continuing with remaining tasks. Error: %v", policy_arn, err)
+									msg := fmt.Sprintf("Unable to attach policy (%v) to user. Continuing with remaining tasks. Error: %v", policy_arn, err)
+									outputAcct.Principal.Errors = append(outputAcct.Principal.Errors, msg)
+									userLog.Errorf(msg)
+								} else {
+									outputAcct.Principal.Policies = append(outputAcct.Principal.Policies, policyname)
 								}
 							}
 
 							access_key_out, err := iamCli.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: cuo.User.UserName})
 							if err != nil {
-								userLog.Errorf("Failed to create access key and secret for user. Error: %v", err)
+								msg := fmt.Sprintf("Failed to create access key and secret for user. Error: %v", err)
+								userLog.Errorf(msg)
+								outputAcct.Principal.Errors = append(outputAcct.Principal.Errors, msg)
 							} else {
-								// TODO: This is dangerous and shouldn't make it into the prod
-								// build!
-								userLog.WithFields(logrus.Fields{"Access Key Id": *access_key_out.AccessKey.AccessKeyId, "Secret Access Key": *access_key_out.AccessKey.SecretAccessKey}).Debug("User access key created.")
+								outputAcct.Principal.AccessKeyId = *access_key_out.AccessKey.AccessKeyId
+								outputAcct.Principal.SecretAccessKey = *access_key_out.AccessKey.SecretAccessKey
+								userLog.Info("User access key created.")
 							}
 						}
 					} // User Create Flow
@@ -145,53 +219,104 @@ to quickly create a Cobra application.`,
 					// Delete flow
 					if iam_principal_delete {
 						userLog = userLog.WithField("action", "UserDelete")
+						deleteUsers := matches
 						if len(matches) > 0 {
 							// TODO: Show the user the matches, and ask if they are sure!
-							userLog.Debug("Deleting the specified user, without any confirmation")
+							userLog.Warn(
+								`Users which match either the exact username, all of the tags, or some subset have been found.
 
-							userLog.Debug("Searching for managed policies associated with user")
-							userReadyForDelete := true
-							err = iamCli.ListAttachedUserPoliciesPages(&iam.ListAttachedUserPoliciesInput{UserName: matches[0].User.UserName}, func(arg1 *iam.ListAttachedUserPoliciesOutput, arg2 bool) bool {
-								for _, policy := range arg1.AttachedPolicies {
-									userLog.Debugf("Deleting managed role (%v) from user", *policy.PolicyName)
-									_, err = iamCli.DetachUserPolicy(&iam.DetachUserPolicyInput{UserName: &iam_principal_name, PolicyArn: policy.PolicyArn})
+Enter the number(s) of the Users you would like to delete.
+
+You can list several, separated by commas. I.E. 0, 1, 3. You can also simply type 'a' to delete all matched users.`)
+
+							deleteChoices, err := stdinReader.ReadString('\n')
+							if err != nil {
+								userLog.Errorf("Failed to read the answer you provided. Users will not be deleted. Error: %v", err)
+								continue // TODO: Does this bail out of the account entirely? Should it?
+							}
+							deleteChoices = strings.TrimRight(deleteChoices, "\n")
+							if strings.ToLower(deleteChoices) != "a" {
+								deleteUsers = []clouds.AwsPrincipalMatch{}
+								for _, idxStr := range strings.Split(strings.ToLower(deleteChoices), ",") {
+									idx, err := strconv.Atoi(idxStr)
 									if err != nil {
-										userLog.Errorf("Failed to delete managed policy (%v) associated with user. User will not be deleted. Error: %v", *policy.PolicyArn, err)
-										userReadyForDelete = false
-										return false
+										userLog.Errorf("One of your choices of users to delete was not a number. Tried to convert %v to a number. Users will not be deleted. Error: %v", idxStr, err)
+										continue // TODO: Does this bail out of the account entirely? Should it?
+									}
+									if len(matches) > idx {
+										deleteUsers = append(deleteUsers, matches[idx])
 									}
 								}
-								return true
-							})
-							if err != nil {
-								userLog.Errorf("Failed to list policies associated with user. User will not be deleted. Error: %v", err)
-								continue
 							}
-
-							err = iamCli.ListAccessKeysPages(&iam.ListAccessKeysInput{UserName: matches[0].User.UserName}, func(arg1 *iam.ListAccessKeysOutput, arg2 bool) bool {
-								for _, key := range arg1.AccessKeyMetadata {
-									userLog.Debugf("Deleting access key (%v) from user", *key.AccessKeyId)
-									_, err = iamCli.DeleteAccessKey(&iam.DeleteAccessKeyInput{AccessKeyId: key.AccessKeyId, UserName: matches[0].User.UserName})
+							var delConfirmBuf bytes.Buffer
+							for idx, delMatch := range deleteUsers {
+								delConfirmBuf.WriteString(fmt.Sprintf("%v: %v\n", idx, delMatch.String()))
+							}
+							userLog.Warnf("The following users will be deleted. THIS CAN NOT BE UNDONE!!\n%v\n\nAre you very, very, very, VERY sure? (y/n)", delConfirmBuf.String())
+							answer, _, err := stdinReader.ReadRune()
+							if err != nil {
+								userLog.Errorf("Failed to read the answer you provided. Users will not be deleted. Error: %v", err)
+								continue // TODO: Does this bail out of the account entirely? Should it?
+							}
+							if unicode.ToLower(answer) == 'y' {
+								for _, deletePrincipal := range deleteUsers {
+									deleteUser, err := deletePrincipal.AsUser()
 									if err != nil {
-										userLog.Errorf("Failed to delete access key (%v) associated with user. User will not be deleted. Error: %v", *key.AccessKeyId, err)
-										userReadyForDelete = false
-										return false
+										userLog.Errorf("This user match wasn't a user at all. Something has gone horribly wrong. Error: %v", err)
+										continue
+									}
+									userLog = userLog.WithField("Username", *deleteUser.UserName)
+									userLog.Debugf("Searching for managed policies associated with user %s", *deleteUser.UserName)
+									userReadyForDelete := true
+									err = iamCli.ListAttachedUserPoliciesPages(&iam.ListAttachedUserPoliciesInput{UserName: deleteUser.UserName}, func(arg1 *iam.ListAttachedUserPoliciesOutput, arg2 bool) bool {
+										for _, policy := range arg1.AttachedPolicies {
+											userLog.Debugf("Deleting managed role (%v) from user %s", *policy.PolicyName, *deleteUser.UserName)
+											_, err = iamCli.DetachUserPolicy(&iam.DetachUserPolicyInput{UserName: deleteUser.UserName, PolicyArn: policy.PolicyArn})
+											if err != nil {
+												userLog.Errorf("Failed to delete managed policy (%v) associated with user %s. User will not be deleted. Error: %v", *policy.PolicyArn, *deleteUser.UserName, err)
+												userReadyForDelete = false
+												return false
+											}
+										}
+										return true
+									})
+									if err != nil {
+										userLog.Errorf("Failed to list policies associated with user %s. User will not be deleted. Error: %v", *deleteUser.UserName, err)
+										continue
+									}
+
+									err = iamCli.ListAccessKeysPages(&iam.ListAccessKeysInput{UserName: deleteUser.UserName}, func(arg1 *iam.ListAccessKeysOutput, arg2 bool) bool {
+										for _, key := range arg1.AccessKeyMetadata {
+											userLog.Debugf("Deleting access key (%v) from user %s", *key.AccessKeyId, *deleteUser.UserName)
+											_, err = iamCli.DeleteAccessKey(&iam.DeleteAccessKeyInput{AccessKeyId: key.AccessKeyId, UserName: deleteUser.UserName})
+											if err != nil {
+												userLog.Errorf("Failed to delete access key (%v) associated with user %s. User will not be deleted. Error: %v", *key.AccessKeyId, *deleteUser.UserName, err)
+												userReadyForDelete = false
+												return false
+											}
+										}
+										return true
+									})
+									if err != nil {
+										userLog.Errorf("Failed to list access keys associated with user %s. User will not be deleted. Error: %v", *deleteUser.UserName, err)
+										continue
+									}
+
+									if !userReadyForDelete {
+										continue
+									}
+
+									_, err = iamCli.DeleteUser(&iam.DeleteUserInput{UserName: deleteUser.UserName})
+									if err != nil {
+										userLog.Errorf("Failed to delete user %s. Error: %v", *deleteUser.UserName, err)
 									}
 								}
-								return true
-							})
-							if err != nil {
-								userLog.Errorf("Failed to list access keys associated with user. User will not be deleted. Error: %v", err)
+							} else if unicode.ToLower(answer) == 'n' {
+								userLog.Info("You answered no. Users will not be deleted")
 								continue
-							}
-
-							if !userReadyForDelete {
-								continue
-							}
-
-							_, err := iamCli.DeleteUser(&iam.DeleteUserInput{UserName: matches[0].User.UserName})
-							if err != nil {
-								userLog.Errorf("Failed to delete user. Error: %v", err)
+							} else {
+								userLog.Errorf("Did not understand your answer. Expected y or n, you provided %v. Users will not be deleted.", answer)
+								continue // TODO: Does this bail out of the account entirely? Should it?
 							}
 						} else {
 							userLog.Warn("No users matching desired username and tags were found to delete")
@@ -202,11 +327,17 @@ to quickly create a Cobra application.`,
 				// Role flow
 				if strings.ToLower(iam_principal_type) == "role" {
 					roleLog := acctLog.WithField("Role", iam_principal_name)
-					// TODO: Find existing roles as matches first
+					roleLog.Infof("Searching for roles matching the rolename \"%s\" and/or tags \"%v\"", iam_principal_name, tags)
+					matches, err := aws.FindMatchingRoles(*acct.Id, x_acct_role, iam_principal_name, tags)
+					if err != nil {
+						roleLog.Errorf("Failed to query roles in the account. Skipping actions in this account. Error: %v", err)
+						continue
+					}
 
 					// Role create flow
 					if iam_principal_create {
-						if false { // Existing role
+						roleLog = roleLog.WithField("action", "RoleAdd")
+						if len(matches) > 0 { // Existing role
 
 						} else { // END Existing Role - START Role does not already exist
 							roleLog.Info("Creating Role")
@@ -216,7 +347,8 @@ to quickly create a Cobra application.`,
     {
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::%s:root"
+        "Service": "ec2.amazonaws.com",
+        "AWS": "arn:aws:sts::%s:assumed-role/%s/%s"
       },
       "Action": "sts:AssumeRole",
       "Condition": {}
@@ -225,9 +357,8 @@ to quickly create a Cobra application.`,
 }
 `
 
-							// assumeRolePolicyDocument = fmt.Sprintf(assumeRolePolicyDocument, turbo_trusted_account_id, turbo_trusted_account_role, turbo_trusted_account_instanceid)
-							assumeRolePolicyDocument = fmt.Sprintf(assumeRolePolicyDocument, turbo_trusted_account_id)
-							roleLog.Debug(assumeRolePolicyDocument)
+							assumeRolePolicyDocument = fmt.Sprintf(assumeRolePolicyDocument, turbo_trusted_account_id, turbo_trusted_account_role, turbo_trusted_account_instanceid)
+							roleLog.Debugf("Role trust relationship is defined as;\n%v", assumeRolePolicyDocument)
 							description := "Need a great description here"
 
 							cro, err := iamCli.CreateRole(&iam.CreateRoleInput{
@@ -267,32 +398,28 @@ to quickly create a Cobra application.`,
 
 							roleLog.Debugf("This ARN to be used to add target. Arn: %v", *cro.Role.Arn)
 						} // Role does not already exist
-					} // Role create flow
-				}
-			}
+					} // Role create Flow
 
-			// 			iamCli := iam.New(sess, &aws.Config{Credentials: stscred})
-			// 			// List users, this can be removed ultimately.
-			// 			err := iamCli.ListUsersPagesWithContext(context.Background(), &iam.ListUsersInput{},
-			// 				func(uo *iam.ListUsersOutput, lastPage bool) bool {
-			// 					for _, user := range uo.Users {
-			//             if *user.UserName == iam_principal_name
-			// 						acctLog.WithFields(log.Fields{"Username": *user.UserName, "User Arn": *user.Arn}).Debug("User iterated")
-			// 					}
-			// 					return true
-			// 				})
-			// 			if err != nil {
-			// 				acctLog.WithFields(log.Fields{"Caused By": err}).Errorf("Failed to list users for current account. Ignoring and continuing with next account.")
-			// 			}
-			// 			acctLog.Info("End operating on new account")
-			// 		}
-			// 		return true // Always continue
-			// 	})
-			// if err != nil {
-			// 	return fmt.Errorf("Unable to list accounts in the organization. Caused By: %v", err)
-			// }
+					if iam_principal_delete { // Role delete flow
+
+					} // Role delete flow
+				} // Role Flow
+			} // Account Loop
 		} else {
 			log.Info("No IAM principal create, nor delete was requested. Skipping the AWS org account list request.")
+		}
+		if len(aws_acct_file) > 0 {
+			outputJson, err := json.MarshalIndent(output, "", " ")
+			if err != nil {
+				log.Errorf("Unable to marshal results into AWS account file. Error: %v", err)
+				return nil
+			}
+
+			err = ioutil.WriteFile(aws_acct_file, outputJson, 0644)
+			if err != nil {
+				log.Errorf("Unable to write AWS account file to disk. Error: %v", err)
+				return nil
+			}
 		}
 		return nil
 	},
@@ -316,9 +443,17 @@ func init() {
 	awsCmd.Flags().BoolVarP(&iam_principal_create, "iam-principal-create", "", false, "When set, the IAM principals will be created.")
 	awsCmd.Flags().BoolVarP(&iam_principal_delete, "iam-principal-delete", "", false, "When set, the IAM principals matching the settings (--iam-principal-name --iam-principal-type, and --tag) will be deleted, after verification.")
 	awsCmd.Flags().StringVar(&iam_principal_type, "iam-principal-type", "", "One of either 'role' or 'user', indicating the type of authentication to use for the Turbo target.")
+	awsCmd.Flags().StringVar(&turbo_trusted_account_id, "turbo-trusted-account-id", "", "The AWS account id where the Turbonomic OpsMgr is running.")
+	awsCmd.Flags().StringVar(&turbo_trusted_account_role, "turbo-trusted-account-role", "", "The AWS role name the Turbonomic OpsMgr is assuming.")
+	awsCmd.Flags().StringVar(&turbo_trusted_account_instanceid, "turbo-trusted-account-instanceid", "", "The AWS EC2 instance id of Turbonomic OpsMgr.")
 
 	// Move these to a parent, or the root most likely
 	awsCmd.Flags().StringVar(&turbo_hostname, "turbo-hostname", "", "The host or ip address of your Turbonomic OpsMgr.")
+	awsCmd.Flags().StringVar(&turbo_username, "turbo-username", "", "The username of an administrator on your Turbonomic OpsMgr.")
+	awsCmd.Flags().StringVar(&turbo_password, "turbo-password", "", "The password of an administrator on your Turbonomic OpsMgr.")
+	awsCmd.Flags().BoolVarP(&turbo_target_create, "turbo-target-create", "", false, "When set, the Turbonomic targets will be created.")
+	awsCmd.Flags().BoolVarP(&turbo_target_delete, "turbo-target-delete", "", false, "When set, the Turbonomic targets will be deleted.")
+	awsCmd.Flags().StringVar(&turbo_target_prefix, "turbo-target-prefix", "", "A prefix to use on the name of targets created by this tool.")
 
 	// Here you will define your flags and configuration settings.
 

@@ -8,7 +8,7 @@
 * AWS
   * User Delete
     * "Force" option with clear documentation
-    * Complete confirmation flow before deleting
+    * ~Complete confirmation flow before deleting~
   * Role Create
     * "Force" option with clear documentation
     * Bail when role already exists
@@ -24,6 +24,7 @@
   * Input validation (ensure that users provide all necessary inputs with useful error/warning/feedback)
   * Success/Fail summary
   * Separate commands to parse/rationalize the account file?
+  * Create tags on principals with provided case (currently all tags are lowercase)
 
 
 # Feature Ideas
