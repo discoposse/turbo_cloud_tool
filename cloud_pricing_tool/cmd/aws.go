@@ -100,6 +100,7 @@ to quickly create a Cobra application.`,
 			}
 		}
 		tags = append(tags, fmt.Sprintf("Turbonomic-Host:%s", turbo_hostname))
+		// IAM principal flow
 		if iam_principal_create || iam_principal_delete {
 			aws := clouds.Aws{
 				Logger: log,
@@ -330,15 +331,41 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 					roleLog.Infof("Searching for roles matching the rolename \"%s\" and/or tags \"%v\"", iam_principal_name, tags)
 					matches, err := aws.FindMatchingRoles(*acct.Id, x_acct_role, iam_principal_name, tags)
 					if err != nil {
-						roleLog.Errorf("Failed to query roles in the account. Skipping actions in this account. Error: %v", err)
+						msg := fmt.Sprintf("Failed to query roles in the account. Skipping actions in this account. Error: %v", err)
+						outputAcct.Errors = append(outputAcct.Errors, msg)
+						roleLog.Errorf(msg)
 						continue
+					}
+					if len(matches) > 0 {
+						var matchesBuf bytes.Buffer
+						for idx, match := range matches {
+							matchesBuf.WriteString(fmt.Sprintf("%v: %v\n", idx, match.String()))
+						}
+						roleLog.Infof("Matching Roles found\n%v", matchesBuf.String())
 					}
 
 					// Role create flow
 					if iam_principal_create {
-						roleLog = roleLog.WithField("action", "RoleAdd")
-						if len(matches) > 0 { // Existing role
+						roleLog = roleLog.WithField("action", "AddRole")
+						outputAcct.Principal = &lib.AwsTargetCmdPrincipal{
+							PrincipalType: "Role",
+							Name:          iam_principal_name,
+						}
+						// TODO: We're currently blocking only when the username matches.
+						// Logic should be added to consider (re)using existing users which
+						// are similar (some tags match).
+						canNotProceed := false
+						for _, match := range matches {
+							if match.PrincipalnameMatch() {
+								canNotProceed = true
+							}
+						}
 
+						if canNotProceed {
+							msg := fmt.Sprintf("A role with the rolename \"%s\" already exists. Duplicate roles are not allowed. Please try a different rolename, or delete the existing role.", iam_principal_name)
+							outputAcct.Principal.Errors = append(outputAcct.Principal.Errors, msg)
+							roleLog.Warnf(msg)
+							continue
 						} else { // END Existing Role - START Role does not already exist
 							roleLog.Info("Creating Role")
 							assumeRolePolicyDocument := `{
@@ -368,7 +395,9 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 								Tags:                     clouds.ConvertStringTagsPointer(tags),
 							})
 							if err != nil {
-								roleLog.Errorf("Failed to create new role. Error: %v", err)
+								msg := fmt.Sprintf("Failed to create new role. Error: %v", err)
+								outputAcct.Principal.Errors = append(outputAcct.Principal.Errors, msg)
+								roleLog.Errorf(msg)
 								continue
 							}
 							roleLog.Debug("Role Created")
@@ -392,22 +421,40 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 								})
 
 								if err != nil {
-									roleLog.Errorf("Unable to attach policy (%s) to role. Continuing with remaining tasks. Error: %v", policyname, err)
+									msg := fmt.Sprintf("Unable to attach policy (%s) to role. Continuing with remaining tasks. Error: %v", policyname, err)
+									outputAcct.Principal.Errors = append(outputAcct.Principal.Errors, msg)
+									roleLog.Errorf(msg)
+								} else {
+									outputAcct.Principal.Policies = append(outputAcct.Principal.Policies, policyname)
 								}
 							}
 
-							roleLog.Debugf("This ARN to be used to add target. Arn: %v", *cro.Role.Arn)
+							outputAcct.Principal.Arn = *cro.Role.Arn
 						} // Role does not already exist
 					} // Role create Flow
 
 					if iam_principal_delete { // Role delete flow
-
+						roleLog = roleLog.WithField("action", "RoleDelete")
+						roleLog.Warn("Not implemented")
 					} // Role delete flow
 				} // Role Flow
 			} // Account Loop
 		} else {
 			log.Info("No IAM principal create, nor delete was requested. Skipping the AWS org account list request.")
-		}
+		} // IAM principal flow
+
+		// Turbo target flow
+		if turbo_target_create || turbo_target_delete {
+			if turbo_target_create { // Turbo target create flow
+
+			} // Turbo target create flow
+
+			if turbo_target_delete {
+
+			}
+		} // Turbo target flow
+
+		// Write the account file
 		if len(aws_acct_file) > 0 {
 			outputJson, err := json.MarshalIndent(output, "", " ")
 			if err != nil {

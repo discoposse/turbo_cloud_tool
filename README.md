@@ -9,9 +9,11 @@
   * User Delete
     * "Force" option with clear documentation
     * ~Complete confirmation flow before deleting~
+  * User "Rotate Credentials"
+    * The ability to find existing users, create new credentials, add them to an existing Turbo target, and delete the old credentials.
   * Role Create
     * "Force" option with clear documentation
-    * Bail when role already exists
+    * ~Bail when role already exists~
   * Role Delete
     * "Force" option with clear documentation
     * Delete all policies before deleting role
@@ -25,6 +27,7 @@
   * Success/Fail summary
   * Separate commands to parse/rationalize the account file?
   * Create tags on principals with provided case (currently all tags are lowercase)
+  * Allow "Updating" of any given principal to add the correct policies, etc.
 
 
 # Feature Ideas
