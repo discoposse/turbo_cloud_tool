@@ -23,6 +23,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"git.turbonomic.com/rgeyer/cloud_pricing_tool/cloud_pricing_tool/lib"
@@ -76,6 +77,7 @@ to quickly create a Cobra application.`,
 		stdinReader := bufio.NewReader(os.Stdin)
 		var output *lib.AwsTargetCmdOutput
 		if len(aws_acct_file) > 0 {
+			log.Debugf("Loading stored principals and targets from output file %s", aws_acct_file)
 			if _, err := os.Stat(aws_acct_file); err == nil {
 				jFile, err := os.Open(aws_acct_file)
 				if err != nil {
@@ -93,8 +95,15 @@ to quickly create a Cobra application.`,
 					return nil
 				}
 			}
+			debugBytes, err := json.MarshalIndent(output, "", " ")
+			if err != nil {
+				log.Debugf("oopsie, marshal error: %v", err)
+			} else {
+				log.Debugf("%v", string(debugBytes))
+			}
 		}
 		if output == nil {
+			log.Debug("Output was nil still?")
 			output = &lib.AwsTargetCmdOutput{
 				Accounts: map[string]*lib.AwsTargetCmdAccount{},
 			}
@@ -102,6 +111,9 @@ to quickly create a Cobra application.`,
 		tags = append(tags, fmt.Sprintf("Turbonomic-Host:%s", turbo_hostname))
 		// IAM principal flow
 		if iam_principal_create || iam_principal_delete {
+			// TODO: Put this at the highest scope of this command (or in a struct)
+			// Make it a pointer, and only set it if credentails have been provided.
+			// This will allow other actions below to check for nil and use it.
 			aws := clouds.Aws{
 				Logger: log,
 			}
@@ -119,7 +131,7 @@ to quickly create a Cobra application.`,
 
 			// Account Loop
 			for _, acct := range accts {
-				outputAcct := &lib.AwsTargetCmdAccount{Id: *acct.Id}
+				outputAcct := &lib.AwsTargetCmdAccount{Id: *acct.Id, Name: *acct.Name}
 				output.Accounts[*acct.Id] = outputAcct
 				iamCli := iam.New(aws.GetSession(), aws.GetConfig("us-east-1", *acct.Id, x_acct_role))
 				acctLog := log.WithField("account", fmt.Sprintf("%v (%v)", *acct.Name, *acct.Id))
@@ -445,12 +457,83 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 
 		// Turbo target flow
 		if turbo_target_create || turbo_target_delete {
+			turbo_api := lib.NewTurboRestClient(turbo_hostname, turbo_username, turbo_password)
 			if turbo_target_create { // Turbo target create flow
+				turboLog := log.WithField("action", "AddTurboTarget")
+				// TODO: This is heavy handed, and inelegant, but may be unavoidable.
+				// When a target fails to validate, it *is* created, but it's UUID is not
+				// returned. Ideally we'd just re-validate the created target, but that
+				// will require re-querying all targets, to get the ID of the one we just
+				// created. Could be done, probably should be done, but will take soem time.
+				turboLog.Debug("Waiting an arbitrary 10 seconds for AWS IAM eventual consistency")
+				time.Sleep(10 * time.Second)
+				if len(output.Accounts) > 0 {
+					for acctId, acct := range output.Accounts {
+						turboLog = turboLog.WithField("account", fmt.Sprintf("%v (%v)", acct.Name, acctId))
+						turboLog.Debug(acct.Principal)
+						if acct.Principal != nil {
+							// TODO: This is duplicated code right now, need to refactor this
+							// per the comment higher up in the file.
+							aws := clouds.Aws{
+								Logger: log,
+							}
+							aws.SetCredentials(aws_access_key_id, aws_secret_access_key)
+							iamCli := iam.New(aws.GetSession(), aws.GetConfig("us-east-1", acct.Id, x_acct_role))
+							outputTarget := &lib.AwsTargetCmdTurboTarget{
+								Hostname: turbo_hostname,
+								Name:     acct.Name,
+							}
+							output.Accounts[acctId].TurboTarget = outputTarget
+							outputTarget.Name = "foobar"
 
+							switch pType := acct.Principal.PrincipalType; pType {
+							case "User":
+								turboLog.Infof("Creating AWS target %s from IAM user credentials.", acct.Name)
+								// time.Sleep(10 * time.Second)
+								target, err := turbo_api.AddAwsUserCloudTarget(acct.Name, acct.Principal.AccessKeyId, acct.Principal.SecretAccessKey)
+								if err != nil {
+									// TODO: Also add errors to output
+									turboLog.Errorf("Unable to create AWS target. Error: %v", err)
+									continue
+								}
+								outputTarget.TargetUuid = target.Uuid
+
+								turboLog.Infof("Tagging IAM principal %s with Turbo target uuid %s", acct.Principal.Name, target.Uuid)
+								key := "Turbonomic-Target-Uuid"
+								_, err = iamCli.TagUser(&iam.TagUserInput{UserName: &acct.Principal.Name, Tags: []*iam.Tag{&iam.Tag{Key: &key, Value: &target.Uuid}}})
+							}
+
+						} else {
+							// TODO: Log error that no principal existed
+							turboLog.Debug("No principal?")
+						}
+					}
+				} else {
+					turboLog.Warn("Either no IAM principals were created during this execution, or the account file contained no IAM principals to add as targets. No targets will be added.")
+				}
 			} // Turbo target create flow
 
 			if turbo_target_delete {
+				// TODO: Only implementing the persist file option, need to be able to search
+				// by prefix as well.
+				log.Debug("Turbo Target Delete")
 
+				debugBytes, err := json.MarshalIndent(output, "", " ")
+				if err != nil {
+					log.Debugf("oopsie, marshal error: %v", err)
+				} else {
+					log.Debugf("%v", string(debugBytes))
+				}
+
+				for _, acct := range output.Accounts {
+					log.Debugf("%v", acct.TurboTarget)
+					if acct.TurboTarget != nil && len(acct.TurboTarget.TargetUuid) > 0 {
+						err := turbo_api.DeleteTarget(acct.TurboTarget.TargetUuid)
+						if err != nil {
+							log.Errorf("Failed to delete specified target. Error: %v", err)
+						}
+					}
+				}
 			}
 		} // Turbo target flow
 

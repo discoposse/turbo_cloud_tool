@@ -4,12 +4,14 @@ import "encoding/json"
 
 type AwsTargetCmdAccount struct {
 	Id          string
+	Name        string
 	Principal   *AwsTargetCmdPrincipal   `json:",omitempty"`
 	TurboTarget *AwsTargetCmdTurboTarget `json:",omitempty"`
 	Errors      []string
 }
 
 type AwsTargetCmdTurboTarget struct {
+	Name       string
 	Hostname   string
 	TargetUuid string
 	Errors     []string
@@ -25,6 +27,9 @@ type AwsTargetCmdPrincipal struct {
 	Errors          []string
 }
 
+// TODO: Set an "active for errors" with an interface, which can be used as an
+// error hook in logrus, so I don't have to do weird gymnastics to log errors in
+// this output.
 type AwsTargetCmdOutput struct {
 	Insecure bool `json:"-"`
 	Accounts map[string]*AwsTargetCmdAccount

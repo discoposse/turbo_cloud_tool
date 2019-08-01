@@ -6,6 +6,8 @@
   * Struct/logic for handling stdin. Lots of duplicated code here, need a standardized reusable mechanism.
 * Azure - On hold until 6.4 and/or more discovery
 * AWS
+  * Separate the account file "output" from the account file "input".
+    * When doing a delete, it would be good to delete the *exact* objects which were created, but the current workflow clobbers the necessary information. Need to have better logic for create/delete, or just have different files for each.
   * User Delete
     * "Force" option with clear documentation
     * ~Complete confirmation flow before deleting~
