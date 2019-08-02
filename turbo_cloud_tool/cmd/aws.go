@@ -73,7 +73,6 @@ This command can be invoked in SEVERAL different ways with different results. It
 https://github.com/turbonomiclabs/turbo_cloud_tool#aws
   `,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		stdinReader := bufio.NewReader(os.Stdin)
 		var output *lib.AwsTargetCmdOutput
 		if len(aws_acct_file) > 0 {
 			log.Debugf("Loading stored principals and targets from output file %s", aws_acct_file)
@@ -101,6 +100,8 @@ https://github.com/turbonomiclabs/turbo_cloud_tool#aws
 				Accounts: map[string]*lib.AwsTargetCmdAccount{},
 			}
 		}
+		// TODO: BAD NEWS! Need to have this be a choice from the user.
+		output.Insecure = true
 		tags = append(tags, fmt.Sprintf("Turbonomic-Host:%s", turbo_hostname))
 		// IAM principal flow
 		if iam_principal_create || iam_principal_delete {
@@ -124,6 +125,7 @@ https://github.com/turbonomiclabs/turbo_cloud_tool#aws
 
 			// Account Loop
 			for _, acct := range accts {
+				stdinReader := bufio.NewReader(os.Stdin)
 				// TODO: All of this conditional logic is getting pretty out of hand
 				// It's already in the TODO of the README, but more modularization and
 				// some refactoring are desperately in order.
@@ -489,8 +491,11 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 
 							switch pType := acct.Principal.PrincipalType; pType {
 							case "User":
+								if len(acct.Principal.AccessKeyId) == 0 || len(acct.Principal.SecretAccessKey) == 0 {
+									turboLog.Error("Either the access key id or the secret access key were not available for this user. Can not proceed with creating Turbonomic Target.")
+									continue
+								}
 								turboLog.Infof("Creating AWS target %s from IAM user credentials.", acct.Name)
-								// time.Sleep(10 * time.Second)
 								target, err := turbo_api.AddAwsUserCloudTarget(acct.Name, acct.Principal.AccessKeyId, acct.Principal.SecretAccessKey)
 								if err != nil {
 									// TODO: Also add errors to output
@@ -505,6 +510,27 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 								_, err = iamCli.TagUser(&iam.TagUserInput{UserName: &acct.Principal.Name, Tags: []*iam.Tag{&iam.Tag{Key: &key, Value: &target.Uuid}}})
 								if err != nil {
 									turboLog.Errorf("Unable to tag IAM user %s. Error: %v", acct.Principal.Name, err)
+								}
+							case "Role":
+								if len(acct.Principal.Arn) == 0 {
+									turboLog.Error("Either the role arn was not set. Can not proceed with creating Turbonomic Target.")
+									continue
+								}
+								turboLog.Infof("Creating AWS target %s from IAM Role Arn.", acct.Name)
+								target, err := turbo_api.AddAwsRoleCloudTarget(acct.Name, acct.Principal.Arn)
+								if err != nil {
+									// TODO: Also add errors to output
+									turboLog.Errorf("Unable to create AWS target. Error: %v", err)
+									continue
+								}
+								outputTarget.TargetUuid = target.Uuid
+								turboLog.Info("Turbo Target Created")
+
+								turboLog.Infof("Tagging IAM principal %s with Turbo target uuid %s", acct.Principal.Name, target.Uuid)
+								key := "Turbonomic-Target-Uuid"
+								_, err = iamCli.TagRole(&iam.TagRoleInput{RoleName: &acct.Principal.Name, Tags: []*iam.Tag{&iam.Tag{Key: &key, Value: &target.Uuid}}})
+								if err != nil {
+									turboLog.Errorf("Unable to tag IAM role %s. Error: %v", acct.Principal.Name, err)
 								}
 							}
 						} else {

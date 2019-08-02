@@ -9,6 +9,25 @@ import (
 	"net/http"
 )
 
+type TurboCloudTargetDto struct {
+	Category    string
+	Type        string
+	InputFields map[string]string
+}
+
+func (t *TurboCloudTargetDto) MarshalJSON() ([]byte, error) {
+	inputFields := []map[string]string{}
+	for name, value := range t.InputFields {
+		inputFields = append(inputFields, map[string]string{"name": name, "value": value})
+	}
+	customMarshal := map[string]interface{}{
+		"category":    t.Category,
+		"type":        t.Type,
+		"inputFields": inputFields,
+	}
+	return json.Marshal(customMarshal)
+}
+
 type TurboRestErrorResponse struct {
 	Type      uint   `json:"type,omitempty"`
 	Exception string `json:"exception,omitempty"`
@@ -71,26 +90,7 @@ func (t *TurboRestClient) DeleteTarget(uuid string) (*TurboRestErrorResponse, er
 	return nil, nil
 }
 
-func (t *TurboRestClient) AddAwsUserCloudTarget(target_name string, username string, password string) (*TurboTargetCreateResponse, error) {
-	inputDto := map[string]interface{}{
-		"category": "Cloud Management",
-		"type":     "AWS",
-		"inputFields": []interface{}{
-			map[string]string{
-				"name":  "address",
-				"value": target_name,
-			},
-			map[string]string{
-				"name":  "username",
-				"value": username,
-			},
-			map[string]string{
-				"name":  "password",
-				"value": password,
-			},
-		},
-	}
-
+func (t *TurboRestClient) addTarget(inputDto TurboCloudTargetDto) (*TurboTargetCreateResponse, error) {
 	bodyBytes, err := json.Marshal(inputDto)
 	body := ioutil.NopCloser(bytes.NewReader(bodyBytes))
 
@@ -119,4 +119,33 @@ func (t *TurboRestClient) AddAwsUserCloudTarget(target_name string, username str
 	}
 
 	return &retval, err
+}
+
+func (t *TurboRestClient) AddAwsRoleCloudTarget(target_name string, role_arn string) (*TurboTargetCreateResponse, error) {
+	inputDto := TurboCloudTargetDto{
+		Category: "Cloud Management",
+		Type:     "AWS",
+		InputFields: map[string]string{
+			"address":  target_name,
+			"username": "key",
+			"password": "secret",
+			"iamRole":  role_arn,
+		},
+	}
+
+	return t.addTarget(inputDto)
+}
+
+func (t *TurboRestClient) AddAwsUserCloudTarget(target_name string, username string, password string) (*TurboTargetCreateResponse, error) {
+	inputDto := TurboCloudTargetDto{
+		Category: "Cloud Management",
+		Type:     "AWS",
+		InputFields: map[string]string{
+			"address":  target_name,
+			"username": username,
+			"password": password,
+		},
+	}
+
+	return t.addTarget(inputDto)
 }
