@@ -55,7 +55,7 @@ func ConvertStringTags(tags []string) []iam.Tag {
 	retval := []iam.Tag{}
 	if tags != nil {
 		for _, strTag := range tags {
-			tagParts := strings.Split(strings.ToLower(strTag), ":")
+			tagParts := strings.Split(strTag, ":")
 			key := tagParts[0]
 			value := tagParts[1]
 
@@ -74,7 +74,7 @@ func ConvertStringTagsPointer(tags []string) []*iam.Tag {
 	retval := []*iam.Tag{}
 	if tags != nil {
 		for _, strTag := range tags {
-			tagParts := strings.Split(strings.ToLower(strTag), ":")
+			tagParts := strings.Split(strTag, ":")
 			key := tagParts[0]
 			value := tagParts[1]
 
@@ -118,8 +118,8 @@ func (m *AwsPrincipalMatch) MatchedTags() []iam.Tag {
 
 	for _, iamTag := range m.IamTags {
 		for _, principalTag := range principalTags {
-			if strings.ToLower(*principalTag.Key) == *iamTag.Key &&
-				strings.ToLower(*principalTag.Value) == *iamTag.Value {
+			if strings.ToLower(*principalTag.Key) == strings.ToLower(*iamTag.Key) &&
+				strings.ToLower(*principalTag.Value) == strings.ToLower(*iamTag.Value) {
 				retval = append(retval, iamTag)
 			}
 		}

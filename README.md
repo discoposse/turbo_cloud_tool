@@ -1,9 +1,128 @@
+# Turbo Cloud Tool
+A golang library and CLI providing several useful utilities for dealing with cloud providers, and the Turbonomic OpsMgr.
+
+Notably, being able to properly setup Turbnomic [targets](https://turbonomic.com/wp-content/uploads/2019/03/TargetConfiguration_6.3.1.pdf#page=39&zoom=100,0,273) in a consistent and automated fashion.
+
+# Table of contents
+* [Turbo Cloud Tool](#turbo-cloud-tool)
+* [Sub commands](#sub-commands)
+  * [AWS](#aws)
+     * [IAM Principals](#iam-principals)
+     * [Turbonomic Target](#turbonomic-target)
+     * [Common use cases](#common-use-cases)
+        * [Create IAM Users &amp; Turbonomic Targets](#create-iam-users--turbonomic-targets)
+        * [Create IAM Roles &amp; Turbonomic Targets](#create-iam-roles--turbonomic-targets)
+        * [(Only) Create IAM Users](#only-create-iam-users)
+        * [(Only) Create IAM Roles](#only-create-iam-roles)
+        * [(Only) Create Turbonomic Targets](#only-create-turbonomic-targets)
+* [TODO](#todo)
+* [Examples](#examples)
+  * [Bulk add targets for IAM roles](#bulk-add-targets-for-iam-roles)
+  * [Bulk add targets for IAM users](#bulk-add-targets-for-iam-users)
+  * [Delete existing IAM users, with confirmation](#delete-existing-iam-users-with-confirmation)
+* [Feature Ideas](#feature-ideas)
+
+# Sub commands
+The turbo cloud tool will eventually have several sub commands. For now, there is only one.
+
+## AWS
+This command can be run in several different configurations depending on the flags that you pass into it when invoking it.
+
+The primary goal of this command is to automate the task of adding a cloud target to Turbonomic for every account in your AWS org.
+
+Before we get into common use cases, there are some concepts you should be familiar with.
+
+A Turbonomic target can be created with one of the following authentication methods.
+
+1. An AWS Access Key Id and Secret Access Key associated with a user - [Docs Link](https://greencircle.vmturbo.com/docs/DOC-3828-connecting-turbonomic-to-amazon-web-services-aws)
+2. An AWS Role ARN - [Docs Link](https://greencircle.vmturbo.com/docs/DOC-6176)
+
+Option #2 is only available when the Turbonomic OpsMgr is running in AWS.
+
+The Turbo Cloud Tool can create either type of IAM principal and add it to Turbonomic as a target.
+
+When the Turbo Cloud Tool creates an IAM principal, and successfully adds it as a Turbonomic target, the IAM principal will have at least the following three tags.
+
+1. Owner:Turbonomic
+2. Turbonomic-Host:<hostname or IP of the Turbonomic OpsMgr>
+3. Turbonomic-Target-Uuid:<unique ID of the Turbonomic target>
+
+You can specify additional tags with the `--tag` option.
+
+### Usage
+```
+./turbo_cloud_tool aws -h
+Automates the creation of IAM principals, and Turbonomic targets for all accounts in your AWS org.
+
+This command can be invoked in SEVERAL different ways with different results. It is recommended that you read the documentation before using this command.
+https://github.com/turbonomiclabs/turbo_cloud_tool#aws
+
+Usage:
+  turbo_cloud_tool aws [flags]
+
+Flags:
+      --aws-access-key-id string                  An AWS Access Key ID for a user with AWSOrganizationsReadOnlyAccess and the
+                                                  ability to assume a privileged role in each account in the org
+      --aws-account-file string                   A filename containing an AWS account list, with optional IAM principal details
+                                                  (AWS Access Key IDs and secrets).
+
+                                                  If set in combination with --iam-principal-create, the child accounts that are
+                                                  found, and the IAM principals which are created will be stored in this file.
+
+                                                  If set in combination with --turbo-target-create this file will be used as the
+                                                  source of target data.
+      --aws-secret-access-key string              An AWS Secret Access Key for a user with AWSOrganizationsReadOnlyAccess and the
+                                                  ability to assume a privileged role in each account in the org
+  -h, --help                                      help for aws
+      --iam-principal-create                      When set, the IAM principals will be created.
+      --iam-principal-delete                      When set, the IAM principals matching the settings
+                                                  (--iam-principal-name --iam-principal-type, and --tag) will be deleted, after verification.
+      --iam-principal-name string                 The name of the IAM principal (User or Role, depending upon --iam-principal-type)
+                                                  which should be created. (default "Turbonomic-OpsMgr-Target")
+      --iam-principal-type string                 One of either 'role' or 'user', indicating the type of authentication to use for the Turbo target.
+      --permit-automation                         When set, the IAM principals will be created with the policies necessary for
+                                                  Turbonomic to automate.
+      --tag strings                               One or many tags to add to the IAM principal which is created. Must be in the
+                                                  form of 'Key:Value'. For instance to add an Owner tag with the value 'Sales' you
+                                                  would use --tag Owner:Sales
+                                                   (default [Owner:Turbonomic,Turbonomic-Host:<hostname or IP of the Turbonomic OpsMgr>,Turbonomic-Target-Uuid:<unique ID of the Turbonomic target>])
+      --turbo-hostname string                     The host or ip address of your Turbonomic OpsMgr.
+      --turbo-password string                     The password of an administrator on your Turbonomic OpsMgr.
+      --turbo-target-create                       When set, the Turbonomic targets will be created.
+      --turbo-target-delete                       When set, the Turbonomic targets will be deleted.
+      --turbo-target-prefix string                A prefix to use on the name of targets created by this tool.
+      --turbo-trusted-account-id string           The AWS account id where the Turbonomic OpsMgr is running.
+      --turbo-trusted-account-instanceid string   The AWS EC2 instance id of Turbonomic OpsMgr.
+      --turbo-trusted-account-role string         The AWS role name the Turbonomic OpsMgr is assuming.
+      --turbo-username string                     The username of an administrator on your Turbonomic OpsMgr.
+      --x-acct-role string                        The name of a cross account role which has privileges to create the IAM principal
+                                                  in each account. (default "OrganizationAccountAccessRole")
+
+Global Flags:
+      --config string   config file (default is $HOME/.turbo_cloud_tool.yaml)
+  -v, --verbose         Enables trace logging for verbose output.
+  ```
+
+### Common use cases
+
+#### Create IAM Users & Turbonomic Targets
+##### Prerequisites
+
+#### Create IAM Roles & Turbonomic Targets
+
+#### (Only) Create IAM Users
+
+#### (Only) Create IAM Roles
+
+#### (Only) Create Turbonomic Targets
+
 # TODO
 * General
-  * Rename appropriately (cloud_target_tool?)
+  * ~Rename appropriately (cloud_target_tool?)~
   * Build/release automation which creates binaries for each arch/platform (OSX, Windows, Linux)
   * Better encapsulation
   * Struct/logic for handling stdin. Lots of duplicated code here, need a standardized reusable mechanism.
+  * Ability to run idempotently, such that it could be run periodically to always add targets for new accounts.
 * Azure - On hold until 6.4 and/or more discovery
 * AWS
   * Separate the account file "output" from the account file "input".
@@ -22,13 +141,14 @@
     * Complete confirmation flow before deleting
   * Turbo Target Create
     * "Force" option with clear documentation
-    * From "in memory" principals created
+    * ~From "in memory" principals created~
     * From principals created and stored in AWS acct file
-    * Go back and tag principal with Target UUID
+      * Likely implemented, needs testing
+    * ~Go back and tag principal with Target UUID~
   * Input validation (ensure that users provide all necessary inputs with useful error/warning/feedback)
   * Success/Fail summary
   * Separate commands to parse/rationalize the account file?
-  * Create tags on principals with provided case (currently all tags are lowercase)
+  * ~Create tags on principals with provided case (currently all tags are lowercase)~
   * Allow "Updating" of any given principal to add the correct policies, etc.
 
 # Examples
@@ -111,7 +231,7 @@ Jul 31 13:24:34.368 [ERRO] [Ryan J. Geyer (385266030856)] [Foo] Failed to query 
 	status code: 403, request id: f305be82-b3d0-11e9-8bac-d5ea1c24e18e
 ```
 
-# Feature Ideas
+# Feature Requests
 
 * Validate that a given cloud account can be used.
   * Azure
@@ -121,3 +241,9 @@ Jul 31 13:24:34.368 [ERRO] [Ryan J. Geyer (385266030856)] [Foo] Failed to query 
   * AWS
     * Org exists, and these credentials have access?
     * Turbonomic OpsMgr Instance running?
+* Provision/deploy OpsMgr in either AWS or Azure
+* Discover running OpsMgr in any subscription/account of any cloud
+  * If found in AWS, recommend use of role based authentication
+* Create (and associate?) IAM instance role for role based authentication
+* Automate enabling memory metrics in either AWS or Azure
+* Automate creating & registering cost and usage report for AWS

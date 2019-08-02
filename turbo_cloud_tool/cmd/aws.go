@@ -26,8 +26,8 @@ import (
 	"time"
 	"unicode"
 
-	"git.turbonomic.com/rgeyer/turbo_cloud_tool/turbo_cloud_tool/lib"
 	"git.turbonomic.com/rgeyer/turbo_cloud_tool/clouds"
+	"git.turbonomic.com/rgeyer/turbo_cloud_tool/turbo_cloud_tool/lib"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/spf13/cobra"
 )
@@ -66,13 +66,12 @@ var automation_policy_names = []string{
 // awsCmd represents the aws command
 var awsCmd = &cobra.Command{
 	Use:   "aws",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "Automates the creation of IAM principals, and Turbonomic targets for all accounts in your AWS org.",
+	Long: `Automates the creation of IAM principals, and Turbonomic targets for all accounts in your AWS org.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+This command can be invoked in SEVERAL different ways with different results. It is recommended that you read the documentation before using this command.
+https://github.com/turbonomiclabs/turbo_cloud_tool#aws
+  `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		stdinReader := bufio.NewReader(os.Stdin)
 		var output *lib.AwsTargetCmdOutput
@@ -559,20 +558,47 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 func init() {
 	rootCmd.AddCommand(awsCmd)
 
-	awsCmd.Flags().StringVar(&aws_access_key_id, "aws-access-key-id", "", "An AWS Access Key ID for a user with AWSOrganizationsReadOnlyAccess and the ability to assume a privileged role in each account in the org")
-	awsCmd.Flags().StringVar(&aws_secret_access_key, "aws-secret-access-key", "", "An AWS Secret Access Key for a user with AWSOrganizationsReadOnlyAccess and the ability to assume a privileged role in each account in the org")
+	awsCmd.Flags().StringVar(&aws_access_key_id, "aws-access-key-id", "",
+		`An AWS Access Key ID for a user with AWSOrganizationsReadOnlyAccess and the
+ability to assume a privileged role in each account in the org`)
+
+	awsCmd.Flags().StringVar(&aws_secret_access_key, "aws-secret-access-key", "",
+		`An AWS Secret Access Key for a user with AWSOrganizationsReadOnlyAccess and the
+ability to assume a privileged role in each account in the org`)
+
 	awsCmd.Flags().StringVar(&aws_acct_file, "aws-account-file", "",
-		`A filename containing an AWS account list, with optional IAM principal details (AWS Access Key IDs and secrets).
+		`A filename containing an AWS account list, with optional IAM principal details
+(AWS Access Key IDs and secrets).
 
-    If set in combination with --iam-principal-create, the child accounts that are found, and the IAM principals which are created will be stored in this file.
+If set in combination with --iam-principal-create, the child accounts that are
+found, and the IAM principals which are created will be stored in this file.
 
-    If set in combination with --turbo-target-create this file will be used as the source of target data.`)
-	awsCmd.Flags().StringSliceVarP(&tags, "tag", "", []string{"Owner:Turbonomic"}, "One or many tags to add to the IAM principal which is created. Must be in the form of 'Key:Value'. For instance to add an Owner tag with the value 'Sales' you would use --tag Owner:Sales")
-	awsCmd.Flags().BoolVarP(&permit_automation, "permit-automation", "", false, "When set, the IAM principals will be created with the policies necessary for Turbonomic to automate.")
-	awsCmd.Flags().StringVarP(&x_acct_role, "x-acct-role", "", "OrganizationAccountAccessRole", "The name of a cross account role which has privileges to create the IAM principal in each account.")
-	awsCmd.Flags().StringVarP(&iam_principal_name, "iam-principal-name", "", "Turbonomic-OpsMgr-Target", "The name of the IAM principal (User or Role, depending upon --iam-principal-type) which should be created.")
+If set in combination with --turbo-target-create this file will be used as the
+source of target data.`)
+
+	awsCmd.Flags().StringSliceVarP(&tags, "tag", "", []string{"Owner:Turbonomic", "Turbonomic-Host:<hostname or IP of the Turbonomic OpsMgr>", "Turbonomic-Target-Uuid:<unique ID of the Turbonomic target>"},
+		`One or many tags to add to the IAM principal which is created. Must be in the
+form of 'Key:Value'. For instance to add an Owner tag with the value 'Sales' you
+would use --tag Owner:Sales
+`)
+
+	awsCmd.Flags().BoolVarP(&permit_automation, "permit-automation", "", false,
+		`When set, the IAM principals will be created with the policies necessary for
+Turbonomic to automate.`)
+
+	awsCmd.Flags().StringVarP(&x_acct_role, "x-acct-role", "", "OrganizationAccountAccessRole",
+		`The name of a cross account role which has privileges to create the IAM principal
+in each account.`)
+
+	awsCmd.Flags().StringVarP(&iam_principal_name, "iam-principal-name", "", "Turbonomic-OpsMgr-Target",
+		`The name of the IAM principal (User or Role, depending upon --iam-principal-type)
+which should be created.`)
+
 	awsCmd.Flags().BoolVarP(&iam_principal_create, "iam-principal-create", "", false, "When set, the IAM principals will be created.")
-	awsCmd.Flags().BoolVarP(&iam_principal_delete, "iam-principal-delete", "", false, "When set, the IAM principals matching the settings (--iam-principal-name --iam-principal-type, and --tag) will be deleted, after verification.")
+	awsCmd.Flags().BoolVarP(&iam_principal_delete, "iam-principal-delete", "", false,
+		`When set, the IAM principals matching the settings
+(--iam-principal-name --iam-principal-type, and --tag) will be deleted, after verification.`)
+
 	awsCmd.Flags().StringVar(&iam_principal_type, "iam-principal-type", "", "One of either 'role' or 'user', indicating the type of authentication to use for the Turbo target.")
 	awsCmd.Flags().StringVar(&turbo_trusted_account_id, "turbo-trusted-account-id", "", "The AWS account id where the Turbonomic OpsMgr is running.")
 	awsCmd.Flags().StringVar(&turbo_trusted_account_role, "turbo-trusted-account-role", "", "The AWS role name the Turbonomic OpsMgr is assuming.")
