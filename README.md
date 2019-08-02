@@ -5,12 +5,13 @@ Notably, being able to properly setup Turbnomic [targets](https://turbonomic.com
 
 # Table of contents
 * [Turbo Cloud Tool](#turbo-cloud-tool)
+* [Table of contents](#table-of-contents)
 * [Sub commands](#sub-commands)
   * [AWS](#aws)
-     * [IAM Principals](#iam-principals)
-     * [Turbonomic Target](#turbonomic-target)
+     * [Usage](#usage)
      * [Common use cases](#common-use-cases)
         * [Create IAM Users &amp; Turbonomic Targets](#create-iam-users--turbonomic-targets)
+           * [Prerequisites](#prerequisites)
         * [Create IAM Roles &amp; Turbonomic Targets](#create-iam-roles--turbonomic-targets)
         * [(Only) Create IAM Users](#only-create-iam-users)
         * [(Only) Create IAM Roles](#only-create-iam-roles)
@@ -20,7 +21,7 @@ Notably, being able to properly setup Turbnomic [targets](https://turbonomic.com
   * [Bulk add targets for IAM roles](#bulk-add-targets-for-iam-roles)
   * [Bulk add targets for IAM users](#bulk-add-targets-for-iam-users)
   * [Delete existing IAM users, with confirmation](#delete-existing-iam-users-with-confirmation)
-* [Feature Ideas](#feature-ideas)
+* [Feature Requests](#feature-requests)
 
 # Sub commands
 The turbo cloud tool will eventually have several sub commands. For now, there is only one.
@@ -104,9 +105,56 @@ Global Flags:
   ```
 
 ### Common use cases
+There are some standard (and expected) ways that you might use this tool. Those are documented below, starting with the two most common use cases. Namely, automatically creating either user based targets, or role based targets in Turbonomic for every AWS account in your organization.
 
 #### Create IAM Users & Turbonomic Targets
+This use case will iterate over every account in your AWS org.
+
+In each account, a new IAM user will be created with the following details
+* The appropriate policies for either read-only or automation access from the Turbonomic OpsMgr will be assigned to the user
+* A new access key will be generated
+
+If an error is encountered, the account will be skipped.
+
+Once all accounts have been iterated, a Turbonomic target will be created for each account where a user was successfully created.
+
 ##### Prerequisites
+* The name of a role which exist in each account with permissions to create IAM principals. By default this is the "OrganizationAccountAccessRole" `--x-acct-role`
+* AWS Access Key Id and Secret of a user with permissions to list all accounts in your org, and assume the role above. `--aws-access-key-id` and `--aws-secret-access-key`
+* Hostname, username, and password for a Turbonomic instance where the targets will be created. `--turbo-hostname`, `--turbo-username`, and `--turbo-password`
+
+##### Example
+```
+./turbo_cloud_tool aws --aws-access-key-id $AWS_ACCESS_KEY_ID --aws-secret-access-key "$AWS_SECRET_ACCESS_KEY" --turbo-hostname localhost --turbo-username "$TURBO_USERNAME" --turbo-password "$TURBO_PASSWORD" --iam-principal-create --turbo-target-create --iam-principal-type user
+Aug  2 13:07:58.270 [INFO] Using config file: /Users/ryangeyer/.turbo_cloud_tool.yaml
+Aug  2 13:07:58.270 [INFO] Querying org for list of child accounts...
+Aug  2 13:07:59.031 [INFO] [TurboBlankAccount (905994805379)] Assuming the role OrganizationAccountAccessRole on account...
+Aug  2 13:07:59.031 [INFO] [TurboBlankAccount (905994805379)] [Turbonomic-OpsMgr-Target] Searching for users matching the username "Turbonomic-OpsMgr-Target" and/or tags "[Owner:Turbonomic Turbonomic-Host:msse01.demo.turbonomic.com]"
+Aug  2 13:07:59.858 [INFO] [TurboBlankAccount (905994805379)] [AddUser] [Turbonomic-OpsMgr-Target] Creating User
+Aug  2 13:07:59.980 [INFO] [TurboBlankAccount (905994805379)] [AddUser] [Turbonomic-OpsMgr-Target] User Created
+Aug  2 13:07:59.980 [INFO] [TurboBlankAccount (905994805379)] [AddUser] [Turbonomic-OpsMgr-Target] Adding Polices to user which allow Turbonomic read only access. Policies: [AmazonEC2ReadOnlyAccess AmazonS3ReadOnlyAccess AmazonRDSReadOnlyAccess]
+Aug  2 13:07:59.980 [INFO] [TurboBlankAccount (905994805379)] [AddUser] [Turbonomic-OpsMgr-Target] Attaching policy (arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess) to user
+Aug  2 13:08:00.093 [INFO] [TurboBlankAccount (905994805379)] [AddUser] [Turbonomic-OpsMgr-Target] Attaching policy (arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess) to user
+Aug  2 13:08:00.206 [INFO] [TurboBlankAccount (905994805379)] [AddUser] [Turbonomic-OpsMgr-Target] Attaching policy (arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess) to user
+Aug  2 13:08:00.429 [INFO] [TurboBlankAccount (905994805379)] [AddUser] [Turbonomic-OpsMgr-Target] User access key created.
+Aug  2 13:08:00.429 [INFO] [Ryan J. Geyer (385266030856)] Assuming the role OrganizationAccountAccessRole on account...
+Aug  2 13:08:00.429 [INFO] [Ryan J. Geyer (385266030856)] [Turbonomic-OpsMgr-Target] Searching for users matching the username "Turbonomic-OpsMgr-Target" and/or tags "[Owner:Turbonomic Turbonomic-Host:msse01.demo.turbonomic.com]"
+Aug  2 13:08:01.666 [INFO] [Ryan J. Geyer (385266030856)] [AddUser] [Turbonomic-OpsMgr-Target] Creating User
+Aug  2 13:08:01.786 [INFO] [Ryan J. Geyer (385266030856)] [AddUser] [Turbonomic-OpsMgr-Target] User Created
+Aug  2 13:08:01.786 [INFO] [Ryan J. Geyer (385266030856)] [AddUser] [Turbonomic-OpsMgr-Target] Adding Polices to user which allow Turbonomic read only access. Policies: [AmazonEC2ReadOnlyAccess AmazonS3ReadOnlyAccess AmazonRDSReadOnlyAccess]
+Aug  2 13:08:01.786 [INFO] [Ryan J. Geyer (385266030856)] [AddUser] [Turbonomic-OpsMgr-Target] Attaching policy (arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess) to user
+Aug  2 13:08:01.900 [INFO] [Ryan J. Geyer (385266030856)] [AddUser] [Turbonomic-OpsMgr-Target] Attaching policy (arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess) to user
+Aug  2 13:08:02.010 [INFO] [Ryan J. Geyer (385266030856)] [AddUser] [Turbonomic-OpsMgr-Target] Attaching policy (arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess) to user
+Aug  2 13:08:02.233 [INFO] [Ryan J. Geyer (385266030856)] [AddUser] [Turbonomic-OpsMgr-Target] User access key created.
+Aug  2 13:08:12.235 [INFO] [Ryan J. Geyer (385266030856)] [AddTurboTarget] Creating Turbo Target
+Aug  2 13:08:12.235 [INFO] [Ryan J. Geyer (385266030856)] [AddTurboTarget] Creating AWS target Ryan J. Geyer from IAM user credentials.
+Aug  2 13:08:14.289 [INFO] [Ryan J. Geyer (385266030856)] [AddTurboTarget] Turbo Target Created
+Aug  2 13:08:14.289 [INFO] [Ryan J. Geyer (385266030856)] [AddTurboTarget] Tagging IAM principal Turbonomic-OpsMgr-Target with Turbo target uuid _A-aY0LVhEemJgbBmfZupWQ
+Aug  2 13:08:14.506 [INFO] [TurboBlankAccount (905994805379)] [AddTurboTarget] Creating Turbo Target
+Aug  2 13:08:14.506 [INFO] [TurboBlankAccount (905994805379)] [AddTurboTarget] Creating AWS target TurboBlankAccount from IAM user credentials.
+Aug  2 13:08:15.577 [INFO] [TurboBlankAccount (905994805379)] [AddTurboTarget] Turbo Target Created
+Aug  2 13:08:15.577 [INFO] [TurboBlankAccount (905994805379)] [AddTurboTarget] Tagging IAM principal Turbonomic-OpsMgr-Target with Turbo target uuid _BPcecLVhEemJgbBmfZupWQ
+```
 
 #### Create IAM Roles & Turbonomic Targets
 

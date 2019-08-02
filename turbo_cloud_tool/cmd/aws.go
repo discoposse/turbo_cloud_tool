@@ -576,7 +576,7 @@ found, and the IAM principals which are created will be stored in this file.
 If set in combination with --turbo-target-create this file will be used as the
 source of target data.`)
 
-	awsCmd.Flags().StringSliceVarP(&tags, "tag", "", []string{"Owner:Turbonomic", "Turbonomic-Host:<hostname or IP of the Turbonomic OpsMgr>", "Turbonomic-Target-Uuid:<unique ID of the Turbonomic target>"},
+	awsCmd.Flags().StringSliceVarP(&tags, "tag", "", []string{"Owner:Turbonomic"},
 		`One or many tags to add to the IAM principal which is created. Must be in the
 form of 'Key:Value'. For instance to add an Owner tag with the value 'Sales' you
 would use --tag Owner:Sales

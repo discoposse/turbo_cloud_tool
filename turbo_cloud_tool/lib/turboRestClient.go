@@ -10,7 +10,7 @@ import (
 )
 
 type TurboRestErrorResponse struct {
-	Type      string `json:"type,omitempty"`
+	Type      uint   `json:"type,omitempty"`
 	Exception string `json:"exception,omitempty"`
 	Message   string `json:"message,omitempty"`
 }
