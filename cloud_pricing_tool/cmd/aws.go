@@ -95,15 +95,9 @@ to quickly create a Cobra application.`,
 					return nil
 				}
 			}
-			debugBytes, err := json.MarshalIndent(output, "", " ")
-			if err != nil {
-				log.Debugf("oopsie, marshal error: %v", err)
-			} else {
-				log.Debugf("%v", string(debugBytes))
-			}
 		}
 		if output == nil {
-			log.Debug("Output was nil still?")
+			log.Debugf("Output file %s did not exist. Creating it.", aws_acct_file)
 			output = &lib.AwsTargetCmdOutput{
 				Accounts: map[string]*lib.AwsTargetCmdAccount{},
 			}
@@ -131,8 +125,16 @@ to quickly create a Cobra application.`,
 
 			// Account Loop
 			for _, acct := range accts {
-				outputAcct := &lib.AwsTargetCmdAccount{Id: *acct.Id, Name: *acct.Name}
-				output.Accounts[*acct.Id] = outputAcct
+				// TODO: All of this conditional logic is getting pretty out of hand
+				// It's already in the TODO of the README, but more modularization and
+				// some refactoring are desperately in order.
+				var outputAcct *lib.AwsTargetCmdAccount
+				if iam_principal_create || turbo_target_create {
+					outputAcct = &lib.AwsTargetCmdAccount{Id: *acct.Id, Name: *acct.Name}
+					output.Accounts[*acct.Id] = outputAcct
+				} else {
+					outputAcct = output.Accounts[*acct.Id]
+				}
 				iamCli := iam.New(aws.GetSession(), aws.GetConfig("us-east-1", *acct.Id, x_acct_role))
 				acctLog := log.WithField("account", fmt.Sprintf("%v (%v)", *acct.Name, *acct.Id))
 				acctLog.Infof("Assuming the role %v on account...", x_acct_role)
@@ -187,7 +189,7 @@ to quickly create a Cobra application.`,
 								userLog.Errorf(msg)
 								continue
 							}
-							userLog.Debug("User Created")
+							userLog.Info("User Created")
 
 							var policy_set []string
 
@@ -201,7 +203,7 @@ to quickly create a Cobra application.`,
 
 							for _, policyname := range policy_set {
 								policy_arn := fmt.Sprintf("arn:aws:iam::aws:policy/%s", policyname)
-								userLog.Debugf("Attaching policy (%v) to user", policy_arn)
+								userLog.Infof("Attaching policy (%v) to user", policy_arn)
 								_, err = iamCli.AttachUserPolicy(&iam.AttachUserPolicyInput{
 									UserName:  cuo.User.UserName,
 									PolicyArn: &policy_arn,
@@ -279,11 +281,11 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 										continue
 									}
 									userLog = userLog.WithField("Username", *deleteUser.UserName)
-									userLog.Debugf("Searching for managed policies associated with user %s", *deleteUser.UserName)
+									userLog.Infof("Searching for managed policies associated with user %s", *deleteUser.UserName)
 									userReadyForDelete := true
 									err = iamCli.ListAttachedUserPoliciesPages(&iam.ListAttachedUserPoliciesInput{UserName: deleteUser.UserName}, func(arg1 *iam.ListAttachedUserPoliciesOutput, arg2 bool) bool {
 										for _, policy := range arg1.AttachedPolicies {
-											userLog.Debugf("Deleting managed role (%v) from user %s", *policy.PolicyName, *deleteUser.UserName)
+											userLog.Infof("Deleting managed role (%v) from user %s", *policy.PolicyName, *deleteUser.UserName)
 											_, err = iamCli.DetachUserPolicy(&iam.DetachUserPolicyInput{UserName: deleteUser.UserName, PolicyArn: policy.PolicyArn})
 											if err != nil {
 												userLog.Errorf("Failed to delete managed policy (%v) associated with user %s. User will not be deleted. Error: %v", *policy.PolicyArn, *deleteUser.UserName, err)
@@ -300,7 +302,7 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 
 									err = iamCli.ListAccessKeysPages(&iam.ListAccessKeysInput{UserName: deleteUser.UserName}, func(arg1 *iam.ListAccessKeysOutput, arg2 bool) bool {
 										for _, key := range arg1.AccessKeyMetadata {
-											userLog.Debugf("Deleting access key (%v) from user %s", *key.AccessKeyId, *deleteUser.UserName)
+											userLog.Infof("Deleting access key (%v) from user %s", *key.AccessKeyId, *deleteUser.UserName)
 											_, err = iamCli.DeleteAccessKey(&iam.DeleteAccessKeyInput{AccessKeyId: key.AccessKeyId, UserName: deleteUser.UserName})
 											if err != nil {
 												userLog.Errorf("Failed to delete access key (%v) associated with user %s. User will not be deleted. Error: %v", *key.AccessKeyId, *deleteUser.UserName, err)
@@ -412,7 +414,7 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 								roleLog.Errorf(msg)
 								continue
 							}
-							roleLog.Debug("Role Created")
+							roleLog.Info("Role Created")
 
 							var policy_set []string
 
@@ -426,7 +428,7 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 
 							for _, policyname := range policy_set {
 								policy_arn := fmt.Sprintf("arn:aws:iam::aws:policy/%s", policyname)
-								roleLog.Debugf("Attaching policy to role. Policy: %v", policy_arn)
+								roleLog.Infof("Attaching policy to role. Policy: %v", policy_arn)
 								_, err = iamCli.AttachRolePolicy(&iam.AttachRolePolicyInput{
 									RoleName:  cro.Role.RoleName,
 									PolicyArn: &policy_arn,
@@ -470,7 +472,7 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 				if len(output.Accounts) > 0 {
 					for acctId, acct := range output.Accounts {
 						turboLog = turboLog.WithField("account", fmt.Sprintf("%v (%v)", acct.Name, acctId))
-						turboLog.Debug(acct.Principal)
+						turboLog.Info("Creating Turbo Target")
 						if acct.Principal != nil {
 							// TODO: This is duplicated code right now, need to refactor this
 							// per the comment higher up in the file.
@@ -497,15 +499,18 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 									continue
 								}
 								outputTarget.TargetUuid = target.Uuid
+								turboLog.Info("Turbo Target Created")
 
 								turboLog.Infof("Tagging IAM principal %s with Turbo target uuid %s", acct.Principal.Name, target.Uuid)
 								key := "Turbonomic-Target-Uuid"
 								_, err = iamCli.TagUser(&iam.TagUserInput{UserName: &acct.Principal.Name, Tags: []*iam.Tag{&iam.Tag{Key: &key, Value: &target.Uuid}}})
+								if err != nil {
+									turboLog.Errorf("Unable to tag IAM user %s. Error: %v", acct.Principal.Name, err)
+								}
 							}
-
 						} else {
 							// TODO: Log error that no principal existed
-							turboLog.Debug("No principal?")
+							turboLog.Warn("There was no IAM principal for this account. Can not proceed to create Turbo target.")
 						}
 					}
 				} else {
@@ -514,24 +519,20 @@ You can list several, separated by commas. I.E. 0, 1, 3. You can also simply typ
 			} // Turbo target create flow
 
 			if turbo_target_delete {
+				turboLog := log.WithField("action", "DeleteTurboTarget")
 				// TODO: Only implementing the persist file option, need to be able to search
 				// by prefix as well.
-				log.Debug("Turbo Target Delete")
-
-				debugBytes, err := json.MarshalIndent(output, "", " ")
-				if err != nil {
-					log.Debugf("oopsie, marshal error: %v", err)
-				} else {
-					log.Debugf("%v", string(debugBytes))
-				}
 
 				for _, acct := range output.Accounts {
-					log.Debugf("%v", acct.TurboTarget)
 					if acct.TurboTarget != nil && len(acct.TurboTarget.TargetUuid) > 0 {
-						err := turbo_api.DeleteTarget(acct.TurboTarget.TargetUuid)
+						turboLog = turboLog.WithField("account", fmt.Sprintf("%v (%v)", acct.Name, acct.Id))
+						turboLog.Info("Deleting Turbo Target")
+						_, err := turbo_api.DeleteTarget(acct.TurboTarget.TargetUuid)
 						if err != nil {
-							log.Errorf("Failed to delete specified target. Error: %v", err)
+							turboLog.Errorf("Failed to delete specified target. Error: %v", err)
+							continue
 						}
+						turboLog.Info("Turbo Target Deleted")
 					}
 				}
 			}

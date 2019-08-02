@@ -1,52 +1,55 @@
 package clouds
 
 import (
-	// . "git.turbonomic.com/rgeyer/cloud_pricing_tool"
-	// . "git.turbonomic.com/rgeyer/cloud_pricing_tool/clouds/mocks"
-
 	"github.com/aws/aws-sdk-go/service/iam"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("AWS", func() {
-	Describe("AWS User Match", func() {
-		Context("Username", func() {
-			Context("Matches Exactly", func() {
-				It("Matches", func() {
-					username := "foo"
-					awsUserMatch := AwsUserMatch{
-						User: &iam.User{
-							UserName: &username,
-						},
-						Username: "foo",
-					}
-
-					Ω(awsUserMatch.UsernameMatch()).To(Equal(true))
-				})
-			})
-
-			Context("Case insensitive match", func() {
-				It("Matches", func() {
-					username := "FoO"
-					match := AwsUserMatch{
-						User: &iam.User{
-							UserName: &username,
-						},
-						Username: "foo",
-					}
-
-					Ω(match.UsernameMatch()).To(Equal(true))
-				})
-			})
-
-			Context("Iam User is Nil", func() {
+	Describe("AWS Principal Match", func() {
+		Context("Principalname", func() {
+			Context("Principal is nil", func() {
 				It("Does Not Match", func() {
-					awsUserMatch := AwsUserMatch{
-						Username: "foo",
+					match := AwsPrincipalMatch{
+						Principalname: "foo",
 					}
 
-					Ω(awsUserMatch.UsernameMatch()).To(Equal(false))
+					Ω(match.PrincipalnameMatch()).To(Equal(false))
+				})
+			})
+
+			Context("Principal is Role", func() {
+
+			})
+
+			Context("Principal is User", func() {
+				Context("Matches Exactly", func() {
+					It("Matches", func() {
+						username := "foo"
+						match := AwsPrincipalMatch{
+							Principal: &iam.User{
+								UserName: &username,
+							},
+							Principalname: "foo",
+						}
+
+						Ω(match.PrincipalnameMatch()).To(Equal(true))
+					})
+				})
+
+				Context("Case insensitive match", func() {
+					It("Matches", func() {
+						username := "FoO"
+						match := AwsPrincipalMatch{
+							Principal: &iam.User{
+								UserName: &username,
+							},
+							Principalname: "foo",
+						}
+
+						Ω(match.PrincipalnameMatch()).To(Equal(true))
+					})
 				})
 			})
 		})
@@ -54,15 +57,15 @@ var _ = Describe("AWS", func() {
 		Context("Matched Tags", func() {
 			Context("User is nil", func() {
 				It("Returns no matches", func() {
-					match := AwsUserMatch{}
+					match := AwsPrincipalMatch{}
 					Ω(len(match.MatchedTags())).To(Equal(0))
 				})
 			})
 
 			Context("User has no tags", func() {
 				It("Returns no matches", func() {
-					match := AwsUserMatch{
-						User: &iam.User{},
+					match := AwsPrincipalMatch{
+						Principal: &iam.User{},
 					}
 					Ω(len(match.MatchedTags())).To(Equal(0))
 				})
@@ -71,8 +74,8 @@ var _ = Describe("AWS", func() {
 			Context("No query tags defined", func() {
 				It("Returns no matches", func() {
 					keyvalstr := "both"
-					match := AwsUserMatch{
-						User: &iam.User{
+					match := AwsPrincipalMatch{
+						Principal: &iam.User{
 							Tags: []*iam.Tag{
 								&iam.Tag{
 									Value: &keyvalstr,
@@ -88,8 +91,8 @@ var _ = Describe("AWS", func() {
 			Context("String Query Tags Supplied", func() {
 				Context("One Exact Match", func() {
 					It("Returns exact match", func() {
-						match := AwsUserMatch{
-							User: &iam.User{
+						match := AwsPrincipalMatch{
+							Principal: &iam.User{
 								Tags: ConvertStringTagsPointer([]string{"key:val"}),
 							},
 							StringTags: []string{"key:val"},
@@ -104,8 +107,8 @@ var _ = Describe("AWS", func() {
 
 				Context("One Case Insensitive Match", func() {
 					It("Returns exact match", func() {
-						match := AwsUserMatch{
-							User: &iam.User{
+						match := AwsPrincipalMatch{
+							Principal: &iam.User{
 								Tags: ConvertStringTagsPointer([]string{"kEy:VaL"}),
 							},
 							StringTags: []string{"key:val"},

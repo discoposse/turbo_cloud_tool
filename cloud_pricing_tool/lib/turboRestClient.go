@@ -9,10 +9,16 @@ import (
 	"net/http"
 )
 
+type TurboRestErrorResponse struct {
+	Type      string `json:"type,omitempty"`
+	Exception string `json:"exception,omitempty"`
+	Message   string `json:"message,omitempty"`
+}
+
 type TurboTargetCreateResponse struct {
-	Type string `json:"type,omitempty"`
-	// Exception     string `json:"exception,omitempty"`
-	// Message       string `json:"message,omitempty"`
+	Type          string `json:"type,omitempty"`
+	Exception     string `json:"exception,omitempty"`
+	Message       string `json:"message,omitempty"`
 	Uuid          string `json:"uuid,omitempty"`
 	DisplayName   string `json:"displayName,omitempty"`
 	Category      string `json:"category,omitempty"`
@@ -40,30 +46,29 @@ func NewTurboRestClient(hostname string, username string, password string) Turbo
 	}
 }
 
-func (t *TurboRestClient) DeleteTarget(uuid string) error {
+func (t *TurboRestClient) DeleteTarget(uuid string) (*TurboRestErrorResponse, error) {
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("https://%v/vmturbo/rest/targets/%v", t.Hostname, uuid), nil)
 	req.SetBasicAuth(t.username, t.password)
 	req.Header.Add("Accept", "application/json")
 	resp, err := t.Client.Do(req)
 	if err != nil {
-		return fmt.Errorf("HTTP error attempting to delete target. Error: %v", err)
+		return nil, fmt.Errorf("HTTP error attempting to delete target. Error: %v", err)
 	}
 
 	bodyText, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("Unable to read API response to delete Target. Error: %v", err)
-	}
-
-	var retval TurboTargetCreateResponse
-	err = json.Unmarshal(bodyText, &retval)
-	if err != nil {
-		return fmt.Errorf("Unable to marshal API response to an object. Error: %v\nResponse: %s", err, string(bodyText))
+		return nil, fmt.Errorf("Unable to read API response to delete Target. Error: %v", err)
 	}
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("Turbonomic API error attempting to delete target. Status Code: %v\nResponse: %s", resp.StatusCode, string(bodyText))
+		var retval TurboRestErrorResponse
+		err = json.Unmarshal(bodyText, &retval)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to marshal API error response to an object. Error: %v\nResponse: %s", err, string(bodyText))
+		}
+		return &retval, fmt.Errorf("Turbonomic API error attempting to delete target. Status Code: %v\nResponse: %s", resp.StatusCode, string(bodyText))
 	}
-	return nil
+	return nil, nil
 }
 
 func (t *TurboRestClient) AddAwsUserCloudTarget(target_name string, username string, password string) (*TurboTargetCreateResponse, error) {
