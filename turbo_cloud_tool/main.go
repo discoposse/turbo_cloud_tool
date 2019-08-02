@@ -14,7 +14,7 @@
 
 package main
 
-import "git.turbonomic.com/rgeyer/cloud_pricing_tool/cloud_pricing_tool/cmd"
+import "git.turbonomic.com/rgeyer/turbo_cloud_tool/turbo_cloud_tool/cmd"
 
 func main() {
 	cmd.Execute()

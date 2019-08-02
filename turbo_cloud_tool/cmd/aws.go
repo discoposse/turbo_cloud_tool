@@ -26,8 +26,8 @@ import (
 	"time"
 	"unicode"
 
-	"git.turbonomic.com/rgeyer/cloud_pricing_tool/cloud_pricing_tool/lib"
-	"git.turbonomic.com/rgeyer/cloud_pricing_tool/clouds"
+	"git.turbonomic.com/rgeyer/turbo_cloud_tool/turbo_cloud_tool/lib"
+	"git.turbonomic.com/rgeyer/turbo_cloud_tool/clouds"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/spf13/cobra"
 )

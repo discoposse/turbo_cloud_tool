@@ -1,4 +1,4 @@
-package cloud_pricing_tool
+package turbo_cloud_tool
 
 import (
 	"fmt"

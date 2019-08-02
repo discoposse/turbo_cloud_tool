@@ -35,8 +35,8 @@
 
 ## Bulk add targets for IAM roles
 ```
-./cloud_pricing_tool aws --aws-access-key-id $AWS_ACCESS_KEY_ID --aws-secret-access-key "$AWS_SECRET_ACCESS_KEY" --iam-principal-type role --iam-principal-name Boo --turbo-hostname localhost --turbo-username "$TURBO_USERNAME" --turbo-password "$TURBO_PASSWORD" --iam-principal-create -v --aws-account-file output.json --turbo-trusted-account-id 385266030856 --turbo-trusted-account-role TurboSEEnablementXAccountTrust --turbo-trusted-account-instanceid i-097ec442cd152a92b
-Jul 31 13:21:29.564 [INFO] Using config file: /Users/ryangeyer/.cloud_pricing_tool.yaml
+./turbo_cloud_tool aws --aws-access-key-id $AWS_ACCESS_KEY_ID --aws-secret-access-key "$AWS_SECRET_ACCESS_KEY" --iam-principal-type role --iam-principal-name Boo --turbo-hostname localhost --turbo-username "$TURBO_USERNAME" --turbo-password "$TURBO_PASSWORD" --iam-principal-create -v --aws-account-file output.json --turbo-trusted-account-id 385266030856 --turbo-trusted-account-role TurboSEEnablementXAccountTrust --turbo-trusted-account-instanceid i-097ec442cd152a92b
+Jul 31 13:21:29.564 [INFO] Using config file: /Users/ryangeyer/.turbo_cloud_tool.yaml
 Jul 31 13:21:29.564 [INFO] Querying org for list of child accounts...
 Jul 31 13:21:30.367 [INFO] [TurboBlankAccount (905994805379)] Assuming the role OrganizationAccountAccessRole on account...
 Jul 31 13:21:30.367 [INFO] [TurboBlankAccount (905994805379)] [Boo] Searching for roles matching the rolename "Boo" and/or tags "[Owner:Turbonomic Turbonomic-Host:localhost]"
@@ -53,8 +53,8 @@ Jul 31 13:21:32.629 [ERRO] [Ryan J. Geyer (385266030856)] [Boo] Failed to query 
 
 ## Bulk add targets for IAM users
 ```
-/cloud_pricing_tool aws --aws-access-key-id $AWS_ACCESS_KEY_ID --aws-secret-access-key "$AWS_SECRET_ACCESS_KEY" --iam-principal-type user --iam-principal-name Foo --turbo-hostname localhost --turbo-username "$TURBO_USERNAME" --turbo-password "$TURBO_PASSWORD" --iam-principal-create -v --aws-account-file output.json
-Jul 31 13:23:45.986 [INFO] Using config file: /Users/ryangeyer/.cloud_pricing_tool.yaml
+/turbo_cloud_tool aws --aws-access-key-id $AWS_ACCESS_KEY_ID --aws-secret-access-key "$AWS_SECRET_ACCESS_KEY" --iam-principal-type user --iam-principal-name Foo --turbo-hostname localhost --turbo-username "$TURBO_USERNAME" --turbo-password "$TURBO_PASSWORD" --iam-principal-create -v --aws-account-file output.json
+Jul 31 13:23:45.986 [INFO] Using config file: /Users/ryangeyer/.turbo_cloud_tool.yaml
 Jul 31 13:23:45.987 [INFO] Querying org for list of child accounts...
 Jul 31 13:23:46.564 [INFO] [TurboBlankAccount (905994805379)] Assuming the role OrganizationAccountAccessRole on account...
 Jul 31 13:23:46.564 [INFO] [TurboBlankAccount (905994805379)] [Foo] Searching for users matching the username "Foo" and/or tags "[Owner:Turbonomic Turbonomic-Host:localhost]"
@@ -73,8 +73,8 @@ Jul 31 13:23:48.281 [ERRO] [Ryan J. Geyer (385266030856)] [Foo] Failed to query 
 
 ## Delete existing IAM users, with confirmation
 ```
-./cloud_pricing_tool aws --aws-access-key-id $AWS_ACCESS_KEY_ID --aws-secret-access-key "$AWS_SECRET_ACCESS_KEY" --iam-principal-type user --iam-principal-name Foo --turbo-hostname localhost --turbo-username "$TURBO_USERNAME" --turbo-password "$TURBO_PASSWORD" --iam-principal-delete -v --aws-account-file output.json
-Jul 31 13:24:27.572 [INFO] Using config file: /Users/ryangeyer/.cloud_pricing_tool.yaml
+./turbo_cloud_tool aws --aws-access-key-id $AWS_ACCESS_KEY_ID --aws-secret-access-key "$AWS_SECRET_ACCESS_KEY" --iam-principal-type user --iam-principal-name Foo --turbo-hostname localhost --turbo-username "$TURBO_USERNAME" --turbo-password "$TURBO_PASSWORD" --iam-principal-delete -v --aws-account-file output.json
+Jul 31 13:24:27.572 [INFO] Using config file: /Users/ryangeyer/.turbo_cloud_tool.yaml
 Jul 31 13:24:27.572 [INFO] Querying org for list of child accounts...
 Jul 31 13:24:28.168 [INFO] [TurboBlankAccount (905994805379)] Assuming the role OrganizationAccountAccessRole on account...
 Jul 31 13:24:28.168 [INFO] [TurboBlankAccount (905994805379)] [Foo] Searching for users matching the username "Foo" and/or tags "[Owner:Turbonomic Turbonomic-Host:localhost]"

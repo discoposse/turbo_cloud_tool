@@ -31,7 +31,7 @@ var verbose bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "cloud_pricing_tool",
+	Use:   "turbo_cloud_tool",
 	Short: "A brief description of your application",
 	Long: `A longer description that spans multiple lines and likely contains
 examples and usage of using your application. For example:
@@ -64,7 +64,7 @@ func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cloud_pricing_tool.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.turbo_cloud_tool.yaml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enables trace logging for verbose output.")
 
 	// Cobra also supports local flags, which will only run
@@ -85,10 +85,10 @@ func initConfig() {
 			os.Exit(1)
 		}
 
-		// Search config in home directory with name ".cloud_pricing_tool" (without extension).
+		// Search config in home directory with name ".turbo_cloud_tool" (without extension).
 		viper.AddConfigPath(home)
-		viper.SetConfigName(".cloud_pricing_tool")
-		cfgFile = fmt.Sprintf("%s/.cloud_pricing_tool.yaml", home)
+		viper.SetConfigName(".turbo_cloud_tool")
+		cfgFile = fmt.Sprintf("%s/.turbo_cloud_tool.yaml", home)
 	}
 
 	// Create the config file if it does not exist
