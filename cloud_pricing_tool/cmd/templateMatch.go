@@ -35,22 +35,22 @@ var templateMatchCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		src_topo, err := NewCostTopoFile(srcfile)
 		if err != nil {
-			return fmt.Errorf("Unable to load source topology file. Error: %s", err)
+			return fmt.Errorf("Unable to load source topology file. Error: %v", err)
 		}
 		dst_topo, err := NewCostTopoFile(destfile)
 		if err != nil {
-			return fmt.Errorf("Unable to load destination topology file. Error: %s", err)
+			return fmt.Errorf("Unable to load destination topology file. Error: %v", err)
 		}
 
 		// Find the source template first
 		src_profiles, err := src_topo.GetProfiles()
 		if err != nil {
-			return fmt.Errorf("Unable to get source templates. Error: %s", err)
+			return fmt.Errorf("Unable to get source templates. Error: %v", err)
 		}
 
 		dst_profiles, err := dst_topo.GetProfiles()
 		if err != nil {
-			return fmt.Errorf("Unable to get destination templates. Error: %s", err)
+			return fmt.Errorf("Unable to get destination templates. Error: %v", err)
 		}
 
 		dst_costs, err := dst_topo.GetOnDemandCosts()
@@ -68,7 +68,7 @@ var templateMatchCmd = &cobra.Command{
 				}
 				json_bytes, err := json.MarshalIndent(output, "", "  ")
 				if err != nil {
-					return fmt.Errorf("Unable to format output response to JSON. Error: %s", err)
+					return fmt.Errorf("Unable to format output response to JSON. Error: %v", err)
 				}
 				fmt.Print(string(json_bytes))
 				return nil

@@ -1,6 +1,7 @@
 package clouds
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/authorization/mgmt/authorization"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/graphrbac/graphrbac"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/subscriptions"
+	"github.com/Azure/azure-sdk-for-go/profiles/preview/preview/commerce/mgmt/commerce"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
@@ -30,6 +32,7 @@ type Azure struct {
 	ClientSecret                     string
 	spToken                          *adal.ServicePrincipalToken
 	authorizer                       autorest.Authorizer
+	rateCardClient                   *commerce.RateCardClient
 	tenantsClient                    *subscriptions.TenantsClient
 	subscriptionsClient              *subscriptions.Client
 	graphRbacSignedInUserClient      *graphrbac.SignedInUserClient
@@ -157,4 +160,26 @@ func (a *Azure) GetRoleAssignmentsClient(subscriptionId string) (authorization.R
 		a.roleAssignmentsClient = &roleCli
 	}
 	return *a.roleAssignmentsClient, nil
+}
+
+func (a *Azure) GetRateCardClient(subscriptionId string) (commerce.RateCardClient, error) {
+	if authd, err := a.isAuthorized(); !authd {
+		return commerce.RateCardClient{}, err
+	}
+	if a.rateCardClient == nil {
+		rcClient := commerce.NewRateCardClient(subscriptionId)
+		a.spToken.RefreshExchange(azure.PublicCloud.ResourceManagerEndpoint)
+		rcClient.Authorizer = autorest.NewBearerAuthorizer(a.spToken)
+		a.rateCardClient = &rcClient
+	}
+	return *a.rateCardClient, nil
+}
+
+func (a *Azure) GetRateCard(subscriptionId string) (commerce.ResourceRateCardInfo, error) {
+	rcClient, err := a.GetRateCardClient(subscriptionId)
+	rate_card_obj, err := rcClient.Get(context.Background(), "OfferDurableId eq 'MS-AZR-0003p' and Currency eq 'USD' and Locale eq 'en-US' and RegionInfo eq 'US'")
+	if err != nil {
+		return commerce.ResourceRateCardInfo{}, err
+	}
+	return rate_card_obj, nil
 }
